@@ -9,6 +9,7 @@ import os
 import time
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
+from oauth2client.service_account import ServiceAccountCredentials
 
 # Apply fix for Jupyter Notebook
 nest_asyncio.apply()
@@ -17,9 +18,11 @@ nest_asyncio.apply()
 print("🔑 Authenticating Google Drive...")
 
 google_creds = "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"
+
 ga = GoogleAuth()
 ga.LoadCredentialsFile(google_creds)
 drive = GoogleDrive(ga)
+
 print("✅ Google Drive Authentication Successful!")
 
 # Deriv API Credentials
