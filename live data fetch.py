@@ -2,14 +2,11 @@ import asyncio
 import websockets
 import json
 import pandas as pd
-import numpy as np
+import os
 from datetime import datetime, timezone
 import nest_asyncio
-import os
-import time
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
-from oauth2client.service_account import ServiceAccountCredentials
 
 # Apply fix for Jupyter Notebook
 nest_asyncio.apply()
@@ -60,14 +57,28 @@ def save_data_to_drive(symbol, new_entry):
         print(f"⚠️ Error saving data to Google Drive: {str(e)}")
 
 def format_price_data(data):
+    symbol = data['symbol']
+    price = data['quote']
+    current_data = current_candles[symbol]
+
+    # Update the high, low, and close prices
+    current_data["High"] = max(current_data["High"], price)
+    current_data["Low"] = min(current_data["Low"], price)
+    current_data["Close"] = price
+
+    # Set Open price only once when the candle starts
+    if current_data["Open"] is None:
+        current_data["Open"] = price
+
+    # Format entry
     return {
         "Time": datetime.fromtimestamp(data['epoch'], timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
-        "Symbol": data['symbol'],
-        "Price": data['quote'],
-        "High": max(current_candles[data['symbol']]['High'], data['quote']),
-        "Low": min(current_candles[data['symbol']]['Low'], data['quote']),
-        "Open": current_candles[data['symbol']]['Open'] if current_candles[data['symbol']]['Open'] else data['quote'],
-        "Close": data['quote']
+        "Symbol": symbol,
+        "Price": price,
+        "High": current_data["High"],
+        "Low": current_data["Low"],
+        "Open": current_data["Open"],
+        "Close": current_data["Close"]
     }
 
 async def authenticate(websocket):
