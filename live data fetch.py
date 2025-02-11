@@ -15,14 +15,10 @@ nest_asyncio.apply()
 
 # Google Drive Authentication
 print("🔑 Authenticating Google Drive...")
+
+google_creds = "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"
 ga = GoogleAuth()
-ga.LoadCredentialsFile("client_secrets.json")  # Load credentials
-if ga.credentials is None:
-    ga.LocalWebserverAuth()  # Open browser for authentication
-elif ga.access_token_expired:
-    ga.Refresh()  # Refresh token if expired
-else:
-    ga.Authorize()
+ga.LoadCredentialsFile(google_creds)
 drive = GoogleDrive(ga)
 print("✅ Google Drive Authentication Successful!")
 
