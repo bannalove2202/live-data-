@@ -1,27 +1,59 @@
 import asyncio
 import websockets
 import json
-import pandas as pd
 import os
+import pandas as pd
 from datetime import datetime, timezone
 import nest_asyncio
-from pydrive.auth import GoogleAuth
+from google.auth.transport.requests import Request
+from google.auth import exceptions
+from google_auth_oauthlib.flow import InstalledAppFlow
 from pydrive.drive import GoogleDrive
+from pydrive.auth import GoogleAuth
+from dotenv import load_dotenv
 
 # Apply fix for Jupyter Notebook
 nest_asyncio.apply()
 
+# Load environment variables from .env file
+load_dotenv()
+
 # Google Drive Authentication
 print("🔑 Authenticating Google Drive...")
 
-google_creds = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
+# Fetch the credentials from the environment variables
+google_creds = {
+    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+    "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+    "auth_uri": os.getenv("GOOGLE_AUTH_URI"),
+    "token_uri": os.getenv("GOOGLE_TOKEN_URI"),
+    "auth_provider_x509_cert_url": os.getenv("GOOGLE_AUTH_PROVIDER_X509_CERT_URL"),
+    "project_id": os.getenv("GOOGLE_PROJECT_ID")
+}
 
 # Save credentials to a temporary file
 with open("client_secrets.json", "w") as f:
     json.dump(google_creds, f)
 
 ga = GoogleAuth()
-ga.LoadCredentialsFile("client_secrets.json")
+
+# Function to authenticate with Google Drive using google-auth
+def authenticate_google_drive():
+    creds = None
+    if os.path.exists('token.json'):
+        creds = GoogleAuth.LoadCredentialsFile('token.json')
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                'client_secrets.json', ['https://www.googleapis.com/auth/drive.file'])
+            creds = flow.run_local_server(port=0)
+        with open('token.json', 'w') as token:
+            token.write(creds.to_json())
+    return creds
+
+ga.credentials = authenticate_google_drive()
 drive = GoogleDrive(ga)
 
 print("✅ Google Drive Authentication Successful!")
