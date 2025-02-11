@@ -17,7 +17,7 @@ nest_asyncio.apply()
 # Google Drive Authentication
 print("🔑 Authenticating Google Drive...")
 
-google_creds = "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"
+google_creds = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
 
 ga = GoogleAuth()
 ga.LoadCredentialsFile(google_creds)
