@@ -11,6 +11,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from pydrive.drive import GoogleDrive
 from pydrive.auth import GoogleAuth
 from dotenv import load_dotenv
+import google_auth_oauthlib
+
 
 # Apply fix for Jupyter Notebook
 nest_asyncio.apply()
