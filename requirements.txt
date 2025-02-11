@@ -1,6 +1,11 @@
 asyncio
 websockets
+json
 pandas
 numpy
 nest_asyncio
-tk
+os
+time
+pydrive
+oauth2client
+datetime
