@@ -1,0 +1,6 @@
+asyncio
+websockets
+pandas
+numpy
+nest_asyncio
+tk
