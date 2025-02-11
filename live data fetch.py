@@ -1,69 +1,32 @@
 import asyncio
 import websockets
 import json
-import os
 import pandas as pd
+import numpy as np
 from datetime import datetime, timezone
 import nest_asyncio
-from google.auth.transport.requests import Request
-from google.auth import exceptions
-from google_auth_oauthlib.flow import InstalledAppFlow
-from pydrive.drive import GoogleDrive
-from pydrive.auth import GoogleAuth
-from dotenv import load_dotenv
-import google_auth_oauthlib
-
+import time
+import tkinter as tk
+from tkinter import filedialog
+import os
 
 # Apply fix for Jupyter Notebook
 nest_asyncio.apply()
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Google Drive Authentication
-print("🔑 Authenticating Google Drive...")
-
-# Fetch the credentials from the environment variables
-google_creds = {
-    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-    "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
-    "auth_uri": os.getenv("GOOGLE_AUTH_URI"),
-    "token_uri": os.getenv("GOOGLE_TOKEN_URI"),
-    "auth_provider_x509_cert_url": os.getenv("GOOGLE_AUTH_PROVIDER_X509_CERT_URL"),
-    "project_id": os.getenv("GOOGLE_PROJECT_ID")
-}
-
-# Save credentials to a temporary file
-with open("client_secrets.json", "w") as f:
-    json.dump(google_creds, f)
-
-ga = GoogleAuth()
-
-# Function to authenticate with Google Drive using google-auth
-def authenticate_google_drive():
-    creds = None
-    if os.path.exists('token.json'):
-        creds = GoogleAuth.LoadCredentialsFile('token.json')
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'client_secrets.json', ['https://www.googleapis.com/auth/drive.file'])
-            creds = flow.run_local_server(port=0)
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
-    return creds
-
-ga.credentials = authenticate_google_drive()
-drive = GoogleDrive(ga)
-
-print("✅ Google Drive Authentication Successful!")
+# Create global variable for selected directory
+SAVE_DIRECTORY = None
 
 # Deriv API Credentials
 API_TOKEN = "gVqKgFDHLkSf4UQ"  # Replace with your API Token
 APP_ID = "68227"  # Replace with your Deriv App ID
 DERIV_API_URL = f"wss://ws.binaryws.com/websockets/v3?app_id={APP_ID}"
+
+# Trading settings
+TRADE_AMOUNT = 10  # Amount per trade
+RSI_OVERBOUGHT = 70  # RSI level to consider overbought (SELL)
+RSI_OVERSOLD = 30  # RSI level to consider oversold (BUY)
+SMA_PERIOD = 14  # Moving average period
+MIN_PRICE_CHANGE = 0.0001  # Minimum price change required to trigger trade
 
 # Forex pairs to track
 FOREX_PAIRS = [
@@ -73,70 +36,104 @@ FOREX_PAIRS = [
 ]
 
 # Store price history
-latest_saved_entries = {}
-current_candles = {symbol: {"Open": None, "High": float('-inf'), "Low": float('inf'), "Close": None} for symbol in FOREX_PAIRS}
+latest_saved_entries = {}  # Store last saved entry per pair
+current_candles = {symbol: {"Open": None, "High": float('-inf'), "Low": float('inf'), "Close": None, "Symbol": None, "Ask": None, "Bid": None, "Epoch": None, "Pip_Size": None} for symbol in FOREX_PAIRS}
 
-def save_data_to_drive(symbol, new_entry):
+def select_save_directory():
+    """Function to set a fixed directory (for server environments)"""
+    global SAVE_DIRECTORY
+    SAVE_DIRECTORY = "/opt/render/project/src/data"  # Change this path as needed
+    os.makedirs(SAVE_DIRECTORY, exist_ok=True)
+    print(f"📂 Selected directory for saving files: {SAVE_DIRECTORY}")
+    return True
+
+def save_data_to_csv(symbol, new_entry):
+    global latest_saved_entries, SAVE_DIRECTORY
     try:
-        filename = f"{symbol}_live_data.csv"
+        # Create file path inside the selected directory
+        filename = os.path.join(SAVE_DIRECTORY, f"{symbol}_live_data.csv")
         df = pd.DataFrame([new_entry])
-        df.to_csv(filename, index=False, mode='a', header=not os.path.exists(filename))
         
-        # Upload to Google Drive
-        file_drive = drive.CreateFile({'title': filename})
-        file_drive.SetContentFile(filename)
-        file_drive.Upload()
-        print(f"📁 Data saved to Google Drive: {filename}")
+        # Check if the entry is different from the last saved entry
+        if symbol not in latest_saved_entries or latest_saved_entries[symbol] != new_entry:
+            # Save directly to CSV file in append mode
+            df.to_csv(filename, index=False, mode='a', header=not os.path.exists(filename))
+            latest_saved_entries[symbol] = new_entry
+            print(f"📁 Data saved to {filename}")
+    except PermissionError:
+        print(f"⚠️ Permission denied for {symbol}. Please close any open CSV files.")
+        time.sleep(1)
     except Exception as e:
-        print(f"⚠️ Error saving data to Google Drive: {str(e)}")
-
-def format_price_data(data):
-    symbol = data['symbol']
-    price = data['quote']
-    current_data = current_candles[symbol]
-
-    # Update the high, low, and close prices
-    current_data["High"] = max(current_data["High"], price)
-    current_data["Low"] = min(current_data["Low"], price)
-    current_data["Close"] = price
-
-    # Set Open price only once when the candle starts
-    if current_data["Open"] is None:
-        current_data["Open"] = price
-
-    # Format entry
-    return {
-        "Time": datetime.fromtimestamp(data['epoch'], timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
-        "Symbol": symbol,
-        "Price": price,
-        "High": current_data["High"],
-        "Low": current_data["Low"],
-        "Open": current_data["Open"],
-        "Close": current_data["Close"]
-    }
+        print(f"⚠️ Error saving data for {symbol}: {str(e)}")
+        time.sleep(1)
 
 async def authenticate(websocket):
-    await websocket.send(json.dumps({"authorize": API_TOKEN}))
+    """ Authenticate with API Token """
+    request = {"authorize": API_TOKEN}
+    await websocket.send(json.dumps(request))
     response = await websocket.recv()
     auth_data = json.loads(response)
+
     if "error" in auth_data:
         print("❌ Authorization Error:", auth_data["error"]["message"])
         return False
-    print("✅ Authorized Successfully!")
-    return True
+    else:
+        print("✅ Authorized Successfully!")
+        return True
 
 async def fetch_live_prices(websocket):
-    await websocket.send(json.dumps({"ticks": FOREX_PAIRS}))
+    """ Fetch live forex prices for multiple pairs """
+    request = {"ticks": FOREX_PAIRS}
+    await websocket.send(json.dumps(request))
+
     while True:
         try:
             response = await websocket.recv()
             data = json.loads(response)
+
             if "tick" in data:
                 tick = data["tick"]
                 symbol = tick['symbol']
-                new_entry = format_price_data(tick)
-                save_data_to_drive(symbol, new_entry)
-                print(f"📊 {new_entry}")
+                epoch_time = tick['epoch']
+                price = tick['quote']
+                ask_price = tick.get('ask', None)
+                bid_price = tick.get('bid', None)
+                pip_size = tick.get('pip_size', None)
+
+                # Convert to readable time
+                readable_time = datetime.fromtimestamp(epoch_time, timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+                # Set open price if not already set
+                if current_candles[symbol]["Open"] is None:
+                    current_candles[symbol]["Open"] = price
+
+                # Update current candle
+                current_candles[symbol]["High"] = max(current_candles[symbol]["High"], price)
+                current_candles[symbol]["Low"] = min(current_candles[symbol]["Low"], price)
+                current_candles[symbol]["Close"] = price
+                current_candles[symbol]["Ask"] = ask_price
+                current_candles[symbol]["Bid"] = bid_price
+                current_candles[symbol]["Epoch"] = epoch_time
+                current_candles[symbol]["Pip_Size"] = pip_size
+
+                new_entry = {
+                    "Time": readable_time,
+                    "Symbol": symbol,
+                    "Ask": ask_price,
+                    "Bid": bid_price,
+                    "Epoch": epoch_time,
+                    "Pip_Size": pip_size,
+                    "Open": current_candles[symbol]["Open"],
+                    "Price": price,
+                    "High": current_candles[symbol]["High"],
+                    "Low": current_candles[symbol]["Low"],
+                    "Close": current_candles[symbol]["Close"]
+                }
+                
+                # Save data to CSV
+                save_data_to_csv(symbol, new_entry)
+                print(f"📊 {readable_time} | {symbol} | Price: {price} | Ask: {ask_price} | Bid: {bid_price} | Open: {current_candles[symbol]['Open']} | High: {current_candles[symbol]['High']} | Low: {current_candles[symbol]['Low']} | Close: {current_candles[symbol]['Close']}")
+
         except websockets.exceptions.ConnectionClosed:
             print("⚠️ Connection lost. Reconnecting...")
             await asyncio.sleep(5)
@@ -146,12 +143,17 @@ async def fetch_live_prices(websocket):
             await asyncio.sleep(5)
 
 async def main():
+    # First, ask for directory selection
+    if not select_save_directory():
+        print("Program cannot continue without selecting a directory.")
+        return
+
     while True:
         try:
             async with websockets.connect(DERIV_API_URL) as websocket:
                 if not await authenticate(websocket):
                     return
-                print("📱 Fetching Live Data...")
+                print("\n📱 Fetching Live Data...")
                 await fetch_live_prices(websocket)
         except Exception as e:
             print(f"⚠️ Connection failed: {e}. Retrying in 5 seconds...")
