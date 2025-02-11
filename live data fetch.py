@@ -17,10 +17,14 @@ nest_asyncio.apply()
 # Google Drive Authentication
 print("🔑 Authenticating Google Drive...")
 
-google_creds = "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"
+google_creds = json.loads(os.getenv("GOOGLE_CREDENTIALS_JSON"))
+
+# Save credentials to a temporary file
+with open("client_secrets.json", "w") as f:
+    json.dump(google_creds, f)
 
 ga = GoogleAuth()
-ga.LoadCredentialsFile(google_creds)
+ga.LoadCredentialsFile("client_secrets.json")
 drive = GoogleDrive(ga)
 
 print("✅ Google Drive Authentication Successful!")
@@ -52,9 +56,6 @@ def save_data_to_drive(symbol, new_entry):
         file_drive.SetContentFile(filename)
         file_drive.Upload()
         print(f"📁 Data saved to Google Drive: {filename}")
-        
-        # Cleanup local file
-        os.remove(filename)
     except Exception as e:
         print(f"⚠️ Error saving data to Google Drive: {str(e)}")
 
