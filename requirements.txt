@@ -3,7 +3,6 @@ websockets
 pandas
 numpy
 nest_asyncio
-time
 pydrive
 oauth2client
 datetime
