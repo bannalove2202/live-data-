@@ -1,9 +1,9 @@
+python==3.10
 asyncio
 websockets
 pandas
 numpy
 nest_asyncio
-os
 time
 pydrive
 oauth2client
