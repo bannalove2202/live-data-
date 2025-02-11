@@ -40,23 +40,12 @@ latest_saved_entries = {}  # Store last saved entry per pair
 current_candles = {symbol: {"Open": None, "High": float('-inf'), "Low": float('inf'), "Close": None, "Symbol": None, "Ask": None, "Bid": None, "Epoch": None, "Pip_Size": None} for symbol in FOREX_PAIRS}
 
 def select_save_directory():
-    """Function to open folder selection dialog"""
+    """Function to set a fixed directory (for server environments)"""
     global SAVE_DIRECTORY
-    root = tk.Tk()
-    root.withdraw()  # Hide the main window
-    
-    # Open folder selection dialog
-    selected_directory = filedialog.askdirectory(
-        title='Select Folder to Save CSV Files'
-    )
-    
-    if selected_directory:  # If a folder was selected
-        SAVE_DIRECTORY = selected_directory
-        print(f"📂 Selected directory for saving files: {SAVE_DIRECTORY}")
-        return True
-    else:
-        print("❌ No directory selected. Please select a directory to save files.")
-        return False
+    SAVE_DIRECTORY = "/opt/render/project/src/data"  # Change this path as needed
+    os.makedirs(SAVE_DIRECTORY, exist_ok=True)
+    print(f"📂 Selected directory for saving files: {SAVE_DIRECTORY}")
+    return True
 
 def save_data_to_csv(symbol, new_entry):
     global latest_saved_entries, SAVE_DIRECTORY
