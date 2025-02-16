@@ -17,8 +17,8 @@ nest_asyncio.apply()
 SAVE_DIRECTORY = None
 
 # Deriv API Credentials
-API_TOKEN = "gVqKgFDHLkSf4UQ"  # Replace with your API Token
-APP_ID = "68227"  # Replace with your Deriv App ID
+API_TOKEN = ""  # Replace with your API Token
+APP_ID = ""  # Replace with your Deriv App ID
 DERIV_API_URL = f"wss://ws.binaryws.com/websockets/v3?app_id={APP_ID}"
 
 # Trading settings
